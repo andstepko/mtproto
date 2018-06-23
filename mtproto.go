@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"context"
 )
 
 const (
@@ -279,11 +280,36 @@ func (m *MTProto) GetContacts() error {
 	return nil
 }
 
-func (m *MTProto) SendMessage(user_id int32, msg string) error {
+func (m *MTProto) CheckUsername(ctx context.Context, username string) (bool, error) {
+	respChan := make(chan TL, 1)
+	m.queueSend <- packetToSend{
+		TL_account_checkUsername{
+			username: username,
+		},
+		respChan,
+	}
+
+	select {
+	case <-ctx.Done():
+		return false, nil
+	case x := <-respChan:
+		if _, ok := x.(TL_boolFalse); ok {
+			return false, nil
+		}
+
+		if _, ok := x.(TL_boolTrue); ok {
+			return true, nil
+		}
+
+		return false, fmt.Errorf("RPC: %#v", x)
+	}
+}
+
+func (m *MTProto) SendMessage(userID int32, msg string) error {
 	resp := make(chan TL, 1)
 	m.queueSend <- packetToSend{
 		TL_messages_sendMessage{
-			TL_inputPeerContact{user_id},
+			TL_inputPeerContact{userID},
 			msg,
 			rand.Int63(),
 		},
