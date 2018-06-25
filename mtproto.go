@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 	"context"
+	"io"
 )
 
 const (
@@ -17,10 +18,16 @@ const (
 	appHash = "269069e15c81241f5670c397941016a2"
 )
 
+// Writing to a SecretsStorage must rewrite all previously written data.
+type SecretsStorage interface {
+	io.Reader
+	io.Writer
+}
+
 type MTProto struct {
 	addr      string
 	conn      *net.TCPConn
-	f         *os.File
+	storage   SecretsStorage
 	queueSend chan packetToSend
 	stopSend  chan struct{}
 	stopRead  chan struct{}
@@ -48,14 +55,11 @@ type packetToSend struct {
 	resp chan TL
 }
 
-func NewMTProto(authkeyfile string) (*MTProto, error) {
+func NewMTProto(storage SecretsStorage) (*MTProto, error) {
 	var err error
 	m := new(MTProto)
 
-	m.f, err = os.OpenFile(authkeyfile, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return nil, err
-	}
+	m.storage = storage
 
 	err = m.readData()
 	if err == nil {
@@ -280,6 +284,7 @@ func (m *MTProto) GetContacts() error {
 	return nil
 }
 
+// CheckUsername returns true if username is free.
 func (m *MTProto) CheckUsername(ctx context.Context, username string) (bool, error) {
 	respChan := make(chan TL, 1)
 	m.queueSend <- packetToSend{
@@ -438,12 +443,7 @@ func (m *MTProto) saveData() (err error) {
 	b.StringBytes(m.serverSalt)
 	b.String(m.addr)
 
-	err = m.f.Truncate(0)
-	if err != nil {
-		return err
-	}
-
-	_, err = m.f.WriteAt(b.buf, 0)
+	_, err = m.storage.Write(b.buf)
 	if err != nil {
 		return err
 	}
@@ -453,9 +453,9 @@ func (m *MTProto) saveData() (err error) {
 
 func (m *MTProto) readData() (err error) {
 	b := make([]byte, 1024*4)
-	n, err := m.f.ReadAt(b, 0)
+	n, err := m.storage.Read(b)
 	if n <= 0 {
-		return errors.New("New session")
+		return errors.New("new session")
 	}
 
 	d := NewDecodeBuf(b)

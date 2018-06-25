@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/sdidyk/mtproto"
+	"github.com/andstepko/mtproto"
 )
 
 func usage() {
@@ -44,7 +44,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	m, err := mtproto.NewMTProto(os.Getenv("HOME") + "/.telegram_go")
+	f, err := os.OpenFile(os.Getenv("HOME") + "/.telegram_go", os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		fmt.Printf("File opening failed: %s\n", err)
+		os.Exit(2)
+	}
+
+	m, err := mtproto.NewMTProto(f)
 	if err != nil {
 		fmt.Printf("Create failed: %s\n", err)
 		os.Exit(2)
@@ -60,8 +66,8 @@ func main() {
 	case "auth":
 		err = m.Auth(os.Args[2])
 	case "msg":
-		user_id, _ := strconv.Atoi(os.Args[2])
-		err = m.SendMessage(int32(user_id), os.Args[3])
+		userID, _ := strconv.Atoi(os.Args[2])
+		err = m.SendMessage(int32(userID), os.Args[3])
 
 	case "list":
 		err = m.GetContacts()
