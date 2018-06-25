@@ -2,7 +2,6 @@ package mtproto
 
 import (
 	"encoding/hex"
-	"fmt"
 )
 
 type StringSecretsStorage struct {
@@ -31,8 +30,12 @@ func (s StringSecretsStorage) Read(dst []byte) (int, error) {
 }
 
 func (s *StringSecretsStorage) Write(p []byte) (int, error) {
-	hexString := hex.EncodeToString(p)
-	fmt.Println(hexString)
+	s.data = make([]byte, len(p))
+	copy(s.data, p)
 
-	return len(p), nil
+	if len(p) < len(s.data) {
+		return len(p), nil
+	} else {
+		return len(s.data), nil
+	}
 }
